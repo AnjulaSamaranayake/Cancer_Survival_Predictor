@@ -1,50 +1,97 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from pathlib import Path
-import numpy as np
+from fastapi import FastAPI
+from pydantic import BaseModel
 import joblib
 import pickle
+import numpy as np
+import uvicorn
+import os
 
-app = FastAPI(title="Survival & Mortality Predictor", version="1.0.0")
+#Load Models
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+alive_dead_model_path = os.path.join("model", "breast_cancer_model.pkl")
+survival_months_model_path = os.path.join("model", "xgboost_survival_model.joblib")
 
-FEATURE_COLS = [
-    "Tumor_Size",
-    "T_Stage",
-    "N_Stage",
-    "6th_Stage",
-    "Differentiated",
-    "Grade",
-    "A_Stage",
-    "Progesterone_Status",
-    "Estrogen_Status",
-    "Regional_Node_Examined",
-    "Reginol_Node_Positive",
-]
 
-MODEL_DIR =  Path(__file__).parent / "model"
-CLF_PATH = MODEL_DIR / "breast_cancer_model.pkl"
-REG_PATH = MODEL_DIR / "xgboost_survival_model.joblib"
+with open(alive_dead_model_path, "rb") as f:
+    alive_dead_model = pickle.load(f)
 
-def load_any(path:Path):
+survival_months_model = joblib.load(survival_months_model_path)
+
+# Category Mapping
+
+T_STAGE_MAP = {'T1': 0, 'T2': 1, 'T3': 2, 'T4': 3}
+N_STAGE_MAP = {'N1': 0, 'N2': 1, 'N3': 2}
+STAGE6_MAP = {'IIA': 0, 'IIIA': 1, 'IIIC': 2, 'IIB': 3, 'IIIB': 4}
+DIFF_MAP = {
+    'Poorly differentiated': 0,
+    'Moderately differentiated': 1,
+    'Well differentiated': 2,
+    'Undifferentiated': 3
+}
+A_STAGE_MAP = {'Regional': 0, 'Distant': 1}
+ESTROGEN_MAP = {'Negative': 0, 'Positive': 1}
+PROGESTERONE_MAP = {'Negative': 0, 'Positive': 1}
+
+#Request Schema
+
+class PatientData(BaseModel):
+    Tumor_Size: float
+    T_Stage: str
+    N_Stage: str
+    sixth_Stage: str
+    Differentiated: str
+    Grade: int
+    A_Stage: str
+    Progesterone_Status: str
+    Estrogen_Status: str
+    Regional_Node_Examined: int
+    Reginol_Node_Positive: int
+
+#FastAPI App
+app = FastAPI()
+
+@app.get("/")
+def home():
+    return {"message": "Breast Cancer Prediction API is running"}
+
+@app.post("/predict")
+def predict(data: PatientData):
     try:
-        return joblib.load(path)
-    except Exception:
-        with open(path, "rb") as f:
-            return pickle.load(f)
-        
-if not CLF_PATH.exists():
-    raise RuntimeError(f"Classifier not found at {CLF_PATH}")
-if not REG_PATH.exists():
-    raise RuntimeError(f"Regressor not found at {REG_PATH}")    
+        # Encode categorical fields
+        encoded_features = [
+            data.Tumor_Size,
+            T_STAGE_MAP[data.T_Stage],
+            N_STAGE_MAP[data.N_Stage],
+            STAGE6_MAP[data.sixth_Stage],
+            DIFF_MAP[data.Differentiated],
+            data.Grade,
+            A_STAGE_MAP[data.A_Stage],
+            PROGESTERONE_MAP[data.Progesterone_Status],
+            ESTROGEN_MAP[data.Estrogen_Status],
+            data.Regional_Node_Examined,
+            data.Reginol_Node_Positive
+        ]
 
-clf_model = load_any(CLF_PATH)  # expects 0=dead, 1=alive
-reg_model = load_any(REG_PATH)  # predicts survival months
+        # Convert to numpy array
+        input_array = np.array(encoded_features).reshape(1, -1)
 
+        # Predict Alive/Dead
+        alive_dead_pred = alive_dead_model.predict(input_array)[0]
+
+        # Predict Survival Months
+        survival_months_pred = survival_months_model.predict(input_array)[0]
+
+        # Prepare response
+        result = {
+            "status": "Alive" if alive_dead_pred == 1 else "Dead",
+            "predicted_survival_months": round(float(survival_months_pred), 2)
+        }
+
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+    
+#Run App
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
