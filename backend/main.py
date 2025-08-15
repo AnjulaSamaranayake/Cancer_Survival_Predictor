@@ -9,7 +9,7 @@ import os
 #Load Models
 
 alive_dead_model_path = os.path.join("model", "breast_cancer_model.pkl")
-survival_months_model_path = os.path.join("model", "xgboost_survival_model.joblib")
+survival_months_model_path = os.path.join("model", "decision_tree_model.pkl")
 
 
 with open(alive_dead_model_path, "rb") as f:
@@ -35,6 +35,7 @@ PROGESTERONE_MAP = {'Negative': 0, 'Positive': 1}
 #Request Schema
 
 class PatientData(BaseModel):
+    Age: int
     Tumor_Size: float
     T_Stage: str
     N_Stage: str
@@ -59,6 +60,7 @@ def predict(data: PatientData):
     try:
         # Encode categorical fields
         encoded_features = [
+            data.Age,
             data.Tumor_Size,
             T_STAGE_MAP[data.T_Stage],
             N_STAGE_MAP[data.N_Stage],
