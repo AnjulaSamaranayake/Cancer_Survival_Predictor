@@ -12,10 +12,12 @@ alive_dead_model_path = os.path.join("model", "breast_cancer_model.pkl")
 survival_months_model_path = os.path.join("model", "decision_tree_model.pkl")
 
 
-with open(alive_dead_model_path, "rb") as f:
-    alive_dead_model = pickle.load(f)
-
+alive_dead_model = joblib.load(alive_dead_model_path)
 survival_months_model = joblib.load(survival_months_model_path)
+
+print("Alive/Dead model type:", type(alive_dead_model))
+print("Survival Months model type:", type(survival_months_model))
+
 
 # Category Mapping
 
