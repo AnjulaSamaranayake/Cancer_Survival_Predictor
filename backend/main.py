@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 import uvicorn
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 #Load Models
 
@@ -52,6 +53,14 @@ class PatientData(BaseModel):
 
 #FastAPI App
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # React's default port
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def home():
