@@ -91,6 +91,8 @@ def predict(data: PatientData):
             "predicted_survival_months": round(float(survival_months_pred), 2)
         }
 
+        print("Prediction result:", result)
+        
         return result
     except Exception as e:
         return {"error": str(e)}
